@@ -51,7 +51,11 @@ pub async fn get_message(request: HttpRequest) -> impl Responder {
 }
 
 pub async fn get_post_message(request_raw: Bytes, request: HttpRequest) -> impl Responder {
-    let _name = request.cookie("user").unwrap_or(Cookie::new("user", "Unknown")).value();
+    let name = request.cookie("user");
+    let name = match name {
+        Some(cookie) => String::from(cookie.value()),
+        None => String::from("Unknown")
+    };
     //假装这里有数据库操作验证这个用户的身份
     if let Ok(text) = String::from_utf8(request_raw.to_vec()) {
         match serde_json::from_str::<PostData>(&text) {

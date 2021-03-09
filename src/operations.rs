@@ -1,21 +1,19 @@
-use actix_web::{HttpMessage, HttpRequest, HttpResponse, Responder, get, web::Bytes};
+use actix_web::{HttpMessage, HttpRequest, HttpResponse, Responder, get, web::{self, Bytes}};
 use qstring::QString;
-use serde::Deserialize;
+use diesel::{prelude::*, RunQueryDsl};
 use serde_json::json;
-
-#[derive(Deserialize)]
-struct PostData {
-    title: String,
-    content: String,
-}
+use crate::Pool;
+use crate::models::*;
 
 #[get("/api/message")]
-pub async fn get_message(request: HttpRequest) -> impl Responder {
+pub async fn get_message(request: HttpRequest, pool: web::Data<Pool>) -> impl Responder {
+    use crate::schema::message::dsl::*;
+    let db_connection = pool.get().unwrap();
     let query_string = request.query_string();
     let query_string  = QString::from(query_string);
 
     let limit = query_string.get("limit");
-    let _limit = match limit {
+    let limit = match limit {
         Some(limit_str) => {
             let limit = limit_str.parse::<i32>();
             match limit {
@@ -29,25 +27,31 @@ pub async fn get_message(request: HttpRequest) -> impl Responder {
     };
 
     let offset = query_string.get("offset");
-    let _offset = match offset {
+    let offset = match offset {
         Some(offset_str) => {
             let offset = offset_str.parse::<i32>();
             match offset {
                 Ok(val) => val,
                 Err(_e) => {
-                    return HttpResponse::BadRequest().body("Field 'offset' is not a valid number");
+                    return HttpResponse::BadRequest().body("Field 'offset' is not a valid nu");
                 }
             }
         },
         None => 400
     };
-    let return_json_object = json!({
-        "title": "Gettysburg Address",
-        "message": "Four score and seven years ago our fathers brought forth on this continent a new nation conceived...",
-        "user": "Abraham Lincoln",
-        "timestamp": "1863.11.19",
-    }).to_string(); //假装这里有查询
-    HttpResponse::Ok().body(return_json_object)
+    
+    let return_objects = message
+        .order(id)
+        .limit(limit as i64)
+        .offset(offset as i64)
+        .load::<PostMessage>(&db_connection).unwrap();
+    let return_objects: Vec<String> = return_objects
+        .into_iter()
+        .map(|x| MessageJson::from(x))
+        .map(|x| json!(x).to_string())
+        .collect();
+    let return_objects = json!(return_objects).to_string();
+    HttpResponse::Ok().body(return_objects)
 }
 
 pub async fn get_post_message(request_raw: Bytes, request: HttpRequest) -> impl Responder {
@@ -58,7 +62,7 @@ pub async fn get_post_message(request_raw: Bytes, request: HttpRequest) -> impl 
     };
     //假装这里有数据库操作验证这个用户的身份
     if let Ok(text) = String::from_utf8(request_raw.to_vec()) {
-        match serde_json::from_str::<PostData>(&text) {
+        match serde_json::from_str::<MessageJson>(&text) {
             Ok(post_data) => {
                 if post_data.title.len() > 100 {
                     return HttpResponse::BadRequest().body("Field 'title' Too Long");

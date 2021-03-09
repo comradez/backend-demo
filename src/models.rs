@@ -35,10 +35,20 @@ pub struct MessageJson {
 
 #[derive(Debug, Insertable, Queryable)]
 #[table_name = "user"]
-pub struct PostUser<'a> {
+pub struct PostUser {
     pub id: i32,
-    pub name: &'a str,
-    pub register_date: &'a str,
+    pub name: String,
+    pub register_date: chrono::NaiveDateTime,
+}
+
+impl From<PostUser> for UserJson {
+    fn from(item: PostUser) -> Self {
+        UserJson {
+            id: item.id,
+            name: item.name,
+            register_date: item.register_date.to_string()
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]

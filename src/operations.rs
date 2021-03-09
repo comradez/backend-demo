@@ -1,7 +1,8 @@
 use actix_web::{HttpMessage, HttpRequest, HttpResponse, Responder, get, web::{self, Bytes}};
 use qstring::QString;
-use diesel::{prelude::*, RunQueryDsl};
+use diesel::{RunQueryDsl, insert_into, prelude::*};
 use serde_json::json;
+use chrono::prelude::*;
 use crate::Pool;
 use crate::models::*;
 
@@ -24,8 +25,7 @@ pub async fn get_message(request: HttpRequest, pool: web::Data<Pool>) -> impl Re
             }
         },
         None => 100
-    };
-
+    }; //这里肯定得改，改成更短的if let形式……match套match读代码的人直接痛苦面具
     let offset = query_string.get("offset");
     let offset = match offset {
         Some(offset_str) => {
@@ -40,27 +40,31 @@ pub async fn get_message(request: HttpRequest, pool: web::Data<Pool>) -> impl Re
         None => 400
     };
     
-    let return_objects = message
+    let return_objects: Vec<String> = message
         .order(id)
         .limit(limit as i64)
         .offset(offset as i64)
-        .load::<PostMessage>(&db_connection).unwrap();
-    let return_objects: Vec<String> = return_objects
+        .load::<PostMessage>(&db_connection)
+        .unwrap()
         .into_iter()
         .map(|x| MessageJson::from(x))
         .map(|x| json!(x).to_string())
-        .collect();
-    let return_objects = json!(return_objects).to_string();
+        .collect(); //获取所有message，按照offset和limit进行筛选，然后将所有得到的PostMessage类型对象转换为MessageJson对象，然后Serialize
+    let return_objects = json!(return_objects).to_string(); //把字符串vector序列化为json
     HttpResponse::Ok().body(return_objects)
 }
 
-pub async fn get_post_message(request_raw: Bytes, request: HttpRequest) -> impl Responder {
-    let name = request.cookie("user");
-    let _name = match name {
+pub async fn get_post_message(request_raw: Bytes, request: HttpRequest, pool: web::Data<Pool>) -> impl Responder {
+    use crate::schema::user::dsl::*;
+    let db_connection = pool.get().unwrap();
+    let username = match request.cookie("user") {
         Some(cookie) => String::from(cookie.value()),
         None => String::from("Unknown")
     };
-    //假装这里有数据库操作验证这个用户的身份
+    let userid: i32 = match user.filter(name.eq(&username)).first::<PostUser>(&db_connection) {
+        Ok(vec) => vec.id,
+        Err(_) => return HttpResponse::BadRequest().body("User not exist!"),
+    }; //验证用户的存在性，如果存在则得到用户的id
     if let Ok(text) = String::from_utf8(request_raw.to_vec()) {
         match serde_json::from_str::<MessageJson>(&text) {
             Ok(post_data) => {
@@ -69,7 +73,26 @@ pub async fn get_post_message(request_raw: Bytes, request: HttpRequest) -> impl 
                 } else if post_data.content.len() > 400 {
                     return HttpResponse::BadRequest().body("Field 'content' Too Long");
                 } else {
-                    //假装这里有添加数据库内容的代码
+                    use crate::schema::message::dsl::*;
+                    let new_object_id: i32 = match message
+                        .order_by(id)
+                        .first::<PostMessage>(&db_connection) {
+                            Ok(item) => item.id + 1,
+                            Err(_) => 1
+                        }; //从数据库中获取最新的id，加1作为新的id
+                    let new_object = PostMessage {
+                        id: new_object_id,
+                        user: userid,
+                        title: post_data.title,
+                        content: post_data.content,
+                        pub_date: Local::now().naive_local(),
+                    };
+                    if let Err(_) = insert_into(message)
+                        .values(new_object)
+                        .execute(&db_connection) {
+                            return HttpResponse::InternalServerError().body("Error Saving object");
+                        }
+                    //向数据库中添加内容
                     return HttpResponse::Ok().body("Successfully created.");
                 }
             },
@@ -80,7 +103,11 @@ pub async fn get_post_message(request_raw: Bytes, request: HttpRequest) -> impl 
 }
 
 #[get("/api/clearmessage")]
-pub async fn clear_message() -> impl Responder {
-    //假装这里操作了数据库清除了所有信息
-    HttpResponse::Ok().body("Successfully cleared messages.")
+pub async fn clear_message(pool: web::Data<Pool>) -> impl Responder {
+    use crate::schema::message::dsl::*;
+    let db_connection = pool.get().unwrap();
+    match diesel::delete(message).execute(&db_connection) {
+        Ok(_) => HttpResponse::Ok().body("Successfully cleared messages."),
+        Err(_) => HttpResponse::InternalServerError().body("Error while deleting the table"),
+    }
 }

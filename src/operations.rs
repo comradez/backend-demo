@@ -1,4 +1,4 @@
-use actix_web::{HttpMessage, HttpRequest, HttpResponse, http::Cookie, Responder, get, web::Bytes};
+use actix_web::{HttpMessage, HttpRequest, HttpResponse, Responder, get, web::Bytes};
 use qstring::QString;
 use serde::Deserialize;
 use serde_json::json;
@@ -52,7 +52,7 @@ pub async fn get_message(request: HttpRequest) -> impl Responder {
 
 pub async fn get_post_message(request_raw: Bytes, request: HttpRequest) -> impl Responder {
     let name = request.cookie("user");
-    let name = match name {
+    let _name = match name {
         Some(cookie) => String::from(cookie.value()),
         None => String::from("Unknown")
     };

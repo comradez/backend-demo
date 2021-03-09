@@ -14,32 +14,23 @@ pub async fn get_message(request: HttpRequest, pool: web::Data<Pool>) -> impl Re
     let query_string  = QString::from(query_string);
 
     let limit = query_string.get("limit");
-    let limit = match limit {
-        Some(limit_str) => {
-            let limit = limit_str.parse::<i32>();
-            match limit {
-                Ok(val) => val,
-                Err(_e) => {
-                    return HttpResponse::BadRequest().body("Field 'limit' is not a valid number");
-                }
-            }
-        },
-        None => 100
-    }; //这里肯定得改，改成更短的if let形式……match套match读代码的人直接痛苦面具
+    let limit: u32 = match limit {
+        Some(limit) => 
+            match limit.parse::<u32>() {
+                Ok(val) => val, //有这个字段而且是合法正整数，获取这个值
+                Err(_e) => return HttpResponse::BadRequest().body("Field 'limit' is not a valid number"),
+            }, //有这个字段但不是合法正整数，返回400
+        None => 100 //没有这个字段，默认为100
+    };
     let offset = query_string.get("offset");
-    let offset = match offset {
-        Some(offset_str) => {
-            let offset = offset_str.parse::<i32>();
-            match offset {
+    let offset: u32 = match offset {
+        Some(offset) =>
+            match offset.parse::<u32>() {
                 Ok(val) => val,
-                Err(_e) => {
-                    return HttpResponse::BadRequest().body("Field 'offset' is not a valid nu");
-                }
-            }
-        },
+                Err(_e) => return HttpResponse::BadRequest().body("Field 'offset' is not a valid number"),
+            },
         None => 400
     };
-    
     let return_objects: Vec<String> = message
         .order(id)
         .limit(limit as i64)

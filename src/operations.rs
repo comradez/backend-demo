@@ -18,7 +18,7 @@ pub async fn get_message(request: HttpRequest, pool: web::Data<Pool>) -> impl Re
         Some(limit) => 
             match limit.parse::<u32>() {
                 Ok(val) => val, //有这个字段而且是合法正整数，获取这个值
-                Err(_e) => return HttpResponse::BadRequest().body("Field 'limit' is not a valid number"),
+                Err(_) => return HttpResponse::BadRequest().body(format!("{} is not a number", limit)),
             }, //有这个字段但不是合法正整数，返回400
         None => 100 //没有这个字段，默认为100
     };
@@ -27,7 +27,7 @@ pub async fn get_message(request: HttpRequest, pool: web::Data<Pool>) -> impl Re
         Some(offset) =>
             match offset.parse::<u32>() {
                 Ok(val) => val,
-                Err(_e) => return HttpResponse::BadRequest().body("Field 'offset' is not a valid number"),
+                Err(_) => return HttpResponse::BadRequest().body(format!("{} is not a number", offset)),
             },
         None => 0
     };
@@ -41,8 +41,7 @@ pub async fn get_message(request: HttpRequest, pool: web::Data<Pool>) -> impl Re
         .map(|x| MessageJson::from(x))
         .map(|x| json!(x).to_string())
         .collect(); //获取所有message，按照offset和limit进行筛选，然后将所有得到的PostMessage类型对象转换为MessageJson对象，然后Serialize
-    let return_objects = json!(return_objects).to_string(); //把字符串vector序列化为json
-    HttpResponse::Ok().body(return_objects)
+    HttpResponse::Ok().json(return_objects)
 }
 
 pub async fn get_post_message(request_raw: Bytes, request: HttpRequest, pool: web::Data<Pool>) -> impl Responder {
@@ -54,10 +53,28 @@ pub async fn get_post_message(request_raw: Bytes, request: HttpRequest, pool: we
     };
     let userid: i32 = match user.filter(name.eq(&username)).first::<PostUser>(&db_connection) {
         Ok(vec) => vec.id,
-        Err(_) => return HttpResponse::BadRequest().body("User not exist!"),
+        Err(_) => { //先尝试插入一个
+            let new_user_id = match user
+                .order_by(id.desc())
+                .first::<PostUser>(&db_connection) {
+                    Ok(item) => item.id + 1,
+                    Err(_) => 1,
+                };
+            let temp_user = PostUser {
+                id: new_user_id,
+                name: username.clone(),
+                register_date: Local::now().naive_local(),
+            };
+            if let Err(_e) = insert_into(user)
+                .values(&temp_user)
+                .execute(&db_connection) {
+                    return HttpResponse::BadRequest().body("Validation Error of user:");
+                }
+            new_user_id
+        }
     }; //验证用户的存在性，如果存在则得到用户的id
     if let Ok(text) = String::from_utf8(request_raw.to_vec()) {
-        match serde_json::from_str::<MessageJson>(&text) {
+        match serde_json::from_str::<ReceiveMessageJson>(&text) {
             Ok(post_data) => {
                 if post_data.title.len() > 100 {
                     return HttpResponse::BadRequest().body("Field 'title' Too Long");
@@ -66,7 +83,7 @@ pub async fn get_post_message(request_raw: Bytes, request: HttpRequest, pool: we
                 } else {
                     use crate::schema::message::dsl::*;
                     let new_object_id: i32 = match message
-                        .order_by(id)
+                        .order_by(id.desc())
                         .first::<PostMessage>(&db_connection) {
                             Ok(item) => item.id + 1,
                             Err(_) => 1
@@ -84,13 +101,13 @@ pub async fn get_post_message(request_raw: Bytes, request: HttpRequest, pool: we
                             return HttpResponse::InternalServerError().body("Error Saving object");
                         }
                     //向数据库中添加内容
-                    return HttpResponse::Ok().body("Successfully created.");
+                    return HttpResponse::Created().body("message was sent successfully");
                 }
             },
             Err(_) => return HttpResponse::BadRequest().body("Json Parse Error")
         }
     }
-    HttpResponse::BadRequest().body("Unknown Error")
+    HttpResponse::InternalServerError().body("Unknown Error")
 }
 
 #[get("/api/clearmessage")]

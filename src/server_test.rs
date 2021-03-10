@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod server_test {
-    use actix_web::{App, test::{self}, web::{Bytes}, dev::{Body, ResponseBody}};
+    use actix_web::{App, dev::{Body, ResponseBody}, http::{Cookie, StatusCode}, test::{self}, web::{self, Bytes}};
     use dotenv::dotenv;
     use chrono::Local;
     use crate::Pool;
@@ -82,7 +82,7 @@ mod server_test {
         ).await;
         let req = test::TestRequest::get().uri("/api/message").to_request();
         let mut resp = test::call_service(&mut app, req).await;
-        assert!(resp.status().is_success());
+        assert!(resp.status() == StatusCode::OK);
         let offset = 0;
         let limit = 100;
         let expected_result: Vec<String> = crate::schema::message::dsl::message
@@ -113,5 +113,67 @@ mod server_test {
             }
         };
         assert_eq!(actual_result, expected_result);
+    }
+    #[actix_rt::test]
+    async fn test_add_new_message() {
+        use serde::{Deserialize, Serialize};
+        let database = init_test();
+        let db_connection = database.get().unwrap();
+        let mut app = test::init_service(
+            App::new()
+            .data(database.clone())
+            .route("/api/message", web::post().to(operations::get_post_message))
+        ).await;
+        let title = String::from("Test title");
+        let content = String::from("My test message");
+        let user = String::from("Student");
+        #[derive(Deserialize, Serialize)]
+        struct TempJson {
+            title: String,
+            content: String,
+        };
+        let req = test::TestRequest::post().uri("/api/message").set_json(&TempJson {
+            title: title,
+            content: content,
+        })
+        .cookie(Cookie::new("user", user))
+        .to_request();
+        let mut resp = test::call_service(&mut app, req).await;
+        //assert!(resp.status() == StatusCode::CREATED);
+        
+        
+        
+        let actual_result = match resp.take_body() {
+            ResponseBody::Body(b) => {
+                if let Body::Bytes(bytes) = b {
+                    bytes
+                } else {
+                    Bytes::from("NO")
+                }
+            },
+            ResponseBody::Other(body) => {
+                if let Body::Bytes(bytes) = body {
+                    bytes
+                } else {
+                    Bytes::from("NO")
+                }
+            }
+        };
+/* 
+        let resp_status = resp.status().as_u16();
+        use std::io::Write;
+        let mut file = std::fs::File::create("data.txt").expect("create failed");
+        file.write_all(format!("{}", resp_status).as_bytes()).expect("write failed");
+*/
+        assert_eq!(actual_result, "message was sent successfully");
+        crate::schema::user::dsl::user
+            .filter(crate::schema::user::dsl::name.eq("Student"))
+            .first::<PostUser>(&db_connection)
+            .expect("No user named 'Student' found, panicking.");
+        crate::schema::message::dsl::message
+            .filter(crate::schema::message::dsl::title.eq("Test title"))
+            .filter(crate::schema::message::dsl::content.eq("My test message"))
+            .first::<PostMessage>(&db_connection)
+            .expect("No message found.");
     }
 }

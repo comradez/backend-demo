@@ -57,3 +57,9 @@ pub struct UserJson {
     pub name: String,
     pub register_date: String,
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ReceiveMessageJson {
+    pub title: String,
+    pub content: String,
+}

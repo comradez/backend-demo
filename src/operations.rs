@@ -95,9 +95,12 @@ pub async fn get_post_message(request_raw: Bytes, request: HttpRequest, pool: we
                         content: post_data.content,
                         pub_date: Local::now().naive_local(),
                     };
-                    if let Err(_) = insert_into(message)
+                    if let Err(e) = insert_into(message)
                         .values(new_object)
                         .execute(&db_connection) {
+                            use std::io::Write;
+                            let mut file = std::fs::File::create("data.txt").expect("create failed");
+                            file.write_all(format!("{}", e).as_bytes()).expect("write failed");
                             return HttpResponse::InternalServerError().body("Error Saving object");
                         }
                     //向数据库中添加内容

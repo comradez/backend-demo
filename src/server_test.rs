@@ -16,8 +16,6 @@ mod server_test {
             .build(ConnectionManager::<SqliteConnection>::new(database_url))
             .expect("Unable to open the database.");
         let db_connection = database.get().unwrap();
-        //let _ = diesel::delete(user).execute(&db_connection); //显式忽略其结果，能做就做，做不了就算了
-        //let _ = diesel::delete(crate::schema::message::dsl::message).execute(&db_connection);
         let alice = PostUser {
             id: 1,
             name: String::from("Alice"),
@@ -34,7 +32,6 @@ mod server_test {
         let _ = diesel::insert_into(user)
             .values(&bob)
             .execute(&db_connection);
-
         let hi = PostMessage {
             id: 1,
             user: user.filter(name.eq("Alice")).first::<PostUser>(&db_connection).unwrap().id,
@@ -139,10 +136,7 @@ mod server_test {
         .cookie(Cookie::new("user", user))
         .to_request();
         let mut resp = test::call_service(&mut app, req).await;
-        //assert!(resp.status() == StatusCode::CREATED);
-        
-        
-        
+        assert_eq!(resp.status(), StatusCode::CREATED);
         let actual_result = match resp.take_body() {
             ResponseBody::Body(b) => {
                 if let Body::Bytes(bytes) = b {
@@ -159,12 +153,6 @@ mod server_test {
                 }
             }
         };
-/* 
-        let resp_status = resp.status().as_u16();
-        use std::io::Write;
-        let mut file = std::fs::File::create("data.txt").expect("create failed");
-        file.write_all(format!("{}", resp_status).as_bytes()).expect("write failed");
-*/
         assert_eq!(actual_result, "message was sent successfully");
         crate::schema::user::dsl::user
             .filter(crate::schema::user::dsl::name.eq("Student"))

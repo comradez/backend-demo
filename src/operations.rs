@@ -29,7 +29,7 @@ pub async fn get_message(request: HttpRequest, pool: web::Data<Pool>) -> impl Re
                 Ok(val) => val,
                 Err(_e) => return HttpResponse::BadRequest().body("Field 'offset' is not a valid number"),
             },
-        None => 400
+        None => 0
     };
     let return_objects: Vec<String> = message
         .order(id)

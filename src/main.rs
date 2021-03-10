@@ -4,6 +4,7 @@ extern crate diesel;
 mod operations;
 mod schema;
 mod models;
+mod server_test;
 
 use actix_web::{App, HttpServer, web};
 use diesel::r2d2::{self, ConnectionManager};

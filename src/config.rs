@@ -7,8 +7,7 @@ pub struct ConnectionOptions {
 }
 
 impl diesel::r2d2::CustomizeConnection<SqliteConnection, diesel::r2d2::Error>
-    for ConnectionOptions
-{
+    for ConnectionOptions {
     fn on_acquire(&self, conn: &mut SqliteConnection) -> Result<(), diesel::r2d2::Error> {
         (|| {
             if self.enable_wal {

@@ -51,8 +51,8 @@ pub async fn get_post_message(request_raw: Bytes, request: HttpRequest, pool: we
         Some(cookie) => String::from(cookie.value()),
         None => String::from("Unknown")
     };
-    let userid: i32 = match user.filter(name.eq(&username)).first::<PostUser>(&db_connection) {
-        Ok(vec) => vec.id,
+    let message_user = match user.filter(name.eq(&username)).first::<PostUser>(&db_connection) {
+        Ok(vec) => vec,
         Err(_) => { //先尝试插入一个
             let new_user_id = match user
                 .order_by(id.desc())
@@ -60,19 +60,19 @@ pub async fn get_post_message(request_raw: Bytes, request: HttpRequest, pool: we
                     Ok(item) => item.id + 1,
                     Err(_) => 1,
                 };
-            let temp_user = PostUser {
+            let new_user = PostUser {
                 id: new_user_id,
                 name: username.clone(),
                 register_date: Local::now().naive_local(),
             };
             if let Err(_e) = insert_into(user)
-                .values(&temp_user)
+                .values(&new_user)
                 .execute(&db_connection) {
                     return HttpResponse::BadRequest().body("Validation Error of user:");
                 }
-            new_user_id
+            new_user
         }
-    }; //验证用户的存在性，如果存在则得到用户的id
+    }; //验证用户的存在性，如果存在则得到用户，否则尝试创建
     if let Ok(text) = String::from_utf8(request_raw.to_vec()) {
         match serde_json::from_str::<ReceiveMessageJson>(&text) {
             Ok(post_data) => {
@@ -90,17 +90,14 @@ pub async fn get_post_message(request_raw: Bytes, request: HttpRequest, pool: we
                         }; //从数据库中获取最新的id，加1作为新的id
                     let new_object = PostMessage {
                         id: new_object_id,
-                        user: userid,
+                        user: message_user.id,
                         title: post_data.title,
                         content: post_data.content,
                         pub_date: Local::now().naive_local(),
                     };
-                    if let Err(e) = insert_into(message)
+                    if let Err(_e) = insert_into(message)
                         .values(new_object)
                         .execute(&db_connection) {
-                            use std::io::Write;
-                            let mut file = std::fs::File::create("data.txt").expect("create failed");
-                            file.write_all(format!("{}", e).as_bytes()).expect("write failed");
                             return HttpResponse::InternalServerError().body("Error Saving object");
                         }
                     //向数据库中添加内容

@@ -61,6 +61,13 @@ mod server_test {
             .execute(&db_connection);
         database
     }
+    fn end_test(database: Pool) {
+        let db_connection = database.get().unwrap();
+        let _ = diesel::delete(crate::schema::user::dsl::user)
+            .execute(&db_connection);
+        let _ = diesel::delete(crate::schema::message::dsl::message)
+            .execute(&db_connection);
+    }
 
     #[actix_rt::test]
     async fn test_can_reach() {
@@ -99,6 +106,7 @@ mod server_test {
             .map(|x| MessageJson::from(x))
             .map(|x| json!(x).to_string())
             .collect();
+        end_test(database);
         let expected_result = json!(expected_result).to_string();
         let actual_result = match resp.take_body() {
             ResponseBody::Body(b) => {
@@ -160,7 +168,6 @@ mod server_test {
                 }
             }
         };
-        assert_eq!(actual_result, "message was sent successfully");
         crate::schema::user::dsl::user
             .filter(crate::schema::user::dsl::name.eq("Student"))
             .first::<PostUser>(&db_connection)
@@ -170,5 +177,7 @@ mod server_test {
             .filter(crate::schema::message::dsl::content.eq("My test message"))
             .first::<PostMessage>(&db_connection)
             .expect("No message found.");
+        end_test(database);
+        assert_eq!(actual_result, "message was sent successfully");
     }
 }

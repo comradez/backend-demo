@@ -51,6 +51,9 @@ pub async fn get_post_message(request_raw: Bytes, request: HttpRequest, pool: we
         Some(cookie) => String::from(cookie.value()),
         None => String::from("Unknown")
     };
+    if username.len() > 20 {
+        return HttpResponse::BadRequest().body("User name too long");
+    } //验证用户名长度合法
     let message_user = match user.filter(name.eq(&username)).first::<PostUser>(&db_connection) {
         Ok(vec) => vec,
         Err(_) => { //先尝试插入一个

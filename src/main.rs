@@ -33,6 +33,7 @@ async fn main() -> std::io::Result<()> {
             .data(database.clone())
             .service(operations::get_message)
             .route("/api/message", web::post().to(operations::get_post_message))
+            .service(operations::clear_message)
     })
     .bind("127.0.0.1:8000")?
     .run()

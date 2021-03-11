@@ -23,7 +23,7 @@ async fn main() -> std::io::Result<()> {
         .max_size(16)
         .connection_customizer(Box::new(ConnectionOptions {
             enable_wal: true,
-            enable_foreign_keys: false,
+            enable_foreign_keys: true,
             busy_timeout: Some(std::time::Duration::from_secs(30)),
         }))
         .build(ConnectionManager::<SqliteConnection>::new(database_url))

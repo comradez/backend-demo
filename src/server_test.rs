@@ -1,5 +1,7 @@
 #[cfg(test)]
 mod server_test {
+    use core::panic;
+
     use actix_web::{App, dev::{Body, ResponseBody}, http::{Cookie, StatusCode}, test::{self}, web::{self, Bytes}};
     use dotenv::dotenv;
     use chrono::Local;
@@ -168,15 +170,19 @@ mod server_test {
                 }
             }
         };
-        crate::schema::user::dsl::user
+        if let Err(_) = crate::schema::user::dsl::user
             .filter(crate::schema::user::dsl::name.eq("Student"))
-            .first::<PostUser>(&db_connection)
-            .expect("No user named 'Student' found, panicking.");
-        crate::schema::message::dsl::message
+            .first::<PostUser>(&db_connection) {
+                end_test(database);
+                panic!("No user named 'Student' found, panicking.");
+            }
+        if let Err(_) = crate::schema::message::dsl::message
             .filter(crate::schema::message::dsl::title.eq("Test title"))
             .filter(crate::schema::message::dsl::content.eq("My test message"))
-            .first::<PostMessage>(&db_connection)
-            .expect("No message found.");
+            .first::<PostMessage>(&db_connection) {
+                end_test(database);
+                panic!("No message found, panicking.");
+            } 
         end_test(database);
         assert_eq!(actual_result, "message was sent successfully");
     }

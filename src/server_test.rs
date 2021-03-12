@@ -369,10 +369,10 @@ mod server_test {
             }
         };
         if let Err(_) = crate::schema::user::dsl::user
-            .filter(crate::schema::user::dsl::name.eq("Student"))
+            .filter(crate::schema::user::dsl::name.eq("Unknown"))
             .first::<PostUser>(&db_connection) {
                 end_test(database);
-                panic!("No user named 'Student' found, panicking.");
+                panic!("No user named 'Unknown' found, panicking.");
             }
         if let Err(_) = crate::schema::message::dsl::message
             .filter(crate::schema::message::dsl::title.eq("Test title"))
